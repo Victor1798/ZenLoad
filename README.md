@@ -33,4 +33,14 @@ git clone [https://github.com/TU-USUARIO/ZenLoad.git](https://github.com/TU-USUA
 cd ZenLoad
 
 # Compilar y ejecutar
-dotnet run --project ZenLoad
+dotnet run --project ZenLoad.csproj
+```
+
+### Estructura
+
+- `Models/AppConfig.cs`: reglas y persistencia en `%LOCALAPPDATA%\ZenLoad\config.json`.
+- `Services/FolderMonitorService.cs`: `FileSystemWatcher`, espera de archivos y movimiento seguro.
+- `ViewModels/MainViewModel.cs`: reglas observables y comandos `Guardar`, `Restablecer`, `Agregar` y `Eliminar`.
+- `Views/MainWindow.xaml`: interfaz Fluent basada en WPF-UI.
+
+La aplicación permite agrupar extensiones en una sola fila separándolas por comas, por ejemplo `.doc, .docx, .xls`. Internamente cada extensión se guarda como una regla independiente con el mismo destino. También pide confirmación cuando detecta una extensión desconocida; si se acepta, crea la carpeta correspondiente dentro de `Downloads`, guarda la regla y mueve el archivo pendiente.
