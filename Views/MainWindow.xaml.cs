@@ -1,5 +1,6 @@
 using System.Windows;
 using System.Windows.Threading;
+using System.ComponentModel;
 using ZenLoad.Services;
 using ZenLoad.ViewModels;
 using Wpf.Ui;
@@ -11,6 +12,7 @@ public partial class MainWindow : FluentWindow
 {
     private readonly ContentDialogService _dialogService = new();
     private readonly FolderMonitorService _monitorService = FolderMonitorService.Instance;
+    private bool _allowClose;
 
     public MainWindow(MainViewModel viewModel)
     {
@@ -18,11 +20,46 @@ public partial class MainWindow : FluentWindow
         DataContext = viewModel;
         _dialogService.SetDialogHost(RootContentDialogHost);
         Loaded += OnLoaded;
+        Closing += OnClosing;
     }
 
     private void OnLoaded(object sender, RoutedEventArgs e)
     {
         _monitorService.Start(((MainViewModel)DataContext).Config, ShowNewExtensionDialogAsync);
+    }
+
+    public void HideToTray()
+    {
+        Hide();
+    }
+
+    private void OnClosing(object? sender, CancelEventArgs e)
+    {
+        if (_allowClose)
+        {
+            return;
+        }
+
+        e.Cancel = true;
+        HideToTray();
+    }
+
+    private void OnTrayIconDoubleClick(object sender, RoutedEventArgs e) => ShowFromTray();
+
+    private void OnOpenFromTrayClick(object sender, RoutedEventArgs e) => ShowFromTray();
+
+    private void OnExitFromTrayClick(object sender, RoutedEventArgs e)
+    {
+        _allowClose = true;
+        TrayIcon.Dispose();
+        System.Windows.Application.Current.Shutdown();
+    }
+
+    private void ShowFromTray()
+    {
+        Show();
+        WindowState = WindowState.Normal;
+        Activate();
     }
 
     private async Task<bool> ShowNewExtensionDialogAsync(string extension)

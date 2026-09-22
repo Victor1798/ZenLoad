@@ -4,6 +4,7 @@
                  xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
                  xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
                  xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+                 xmlns:tray="http://schemas.lepo.co/wpfui/2022/xaml/tray"
                  mc:Ignorable="d"
                  Title="ZenLoad"
                  Width="1040"
@@ -93,6 +94,10 @@
                 </ui:Card>
 
                 <StackPanel Margin="0,18,0,0" Orientation="Horizontal" HorizontalAlignment="Right">
+                    <CheckBox Margin="0,0,24,0"
+                              VerticalAlignment="Center"
+                              IsChecked="{Binding StartWithWindows, Mode=TwoWay}"
+                              Content="Iniciar con Windows" />
                     <ui:Button Margin="0,0,10,0"
                                Padding="22,10"
                                Command="{Binding ResetCommand}"
@@ -119,5 +124,21 @@
         </Border>
 
         <ui:ContentDialogHost x:Name="RootContentDialogHost" Grid.RowSpan="3" />
+
+        <tray:NotifyIcon x:Name="TrayIcon"
+                         Grid.RowSpan="3"
+                         FocusOnLeftClick="True"
+                         Icon="{DynamicResource ZenLoadTrayIcon}"
+                         MenuOnRightClick="True"
+                         LeftDoubleClick="OnTrayIconDoubleClick"
+                         TooltipText="ZenLoad">
+            <tray:NotifyIcon.Menu>
+                <ContextMenu>
+                    <MenuItem Header="Abrir ZenLoad" Click="OnOpenFromTrayClick" />
+                    <Separator />
+                    <MenuItem Header="Salir" Click="OnExitFromTrayClick" />
+                </ContextMenu>
+            </tray:NotifyIcon.Menu>
+        </tray:NotifyIcon>
     </Grid>
 </ui:FluentWindow>

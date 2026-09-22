@@ -20,6 +20,11 @@ public partial class App : System.Windows.Application
 
         MainWindow = window;
         window.Show();
+
+        if (e.Args.Any(argument => string.Equals(argument, "--background", StringComparison.OrdinalIgnoreCase)))
+        {
+            window.HideToTray();
+        }
     }
 
     protected override void OnExit(System.Windows.ExitEventArgs e)

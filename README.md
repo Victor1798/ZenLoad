@@ -44,3 +44,5 @@ dotnet run --project ZenLoad.csproj
 - `Views/MainWindow.xaml`: interfaz Fluent basada en WPF-UI.
 
 La aplicación permite agrupar extensiones en una sola fila separándolas por comas, por ejemplo `.doc, .docx, .xls`. Internamente cada extensión se guarda como una regla independiente con el mismo destino. También pide confirmación cuando detecta una extensión desconocida; si se acepta, crea la carpeta correspondiente dentro de `Downloads`, guarda la regla y mueve el archivo pendiente.
+
+ZenLoad puede permanecer activo en la bandeja del sistema. Al cerrar la ventana se oculta sin detener el monitor; usa el menú del icono para abrirlo o salir completamente. La opción `Iniciar con Windows` hace que arranque oculto en segundo plano.

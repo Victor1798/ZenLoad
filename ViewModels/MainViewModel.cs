@@ -13,6 +13,7 @@ public sealed class MainViewModel : INotifyPropertyChanged
     private readonly IFolderPickerService _folderPickerService;
     private string _statusMessage = "Listo para organizar tus Descargas.";
     private RuleEntry? _selectedRule;
+    private bool _startWithWindows;
 
     public MainViewModel(
         AppConfig config,
@@ -22,6 +23,7 @@ public sealed class MainViewModel : INotifyPropertyChanged
         _config = config;
         _monitorService = monitorService;
         _folderPickerService = folderPickerService;
+        _startWithWindows = StartupManager.IsEnabled;
         Rules = new ObservableCollection<RuleEntry>();
         LoadRules();
 
@@ -65,6 +67,25 @@ public sealed class MainViewModel : INotifyPropertyChanged
             }
 
             _statusMessage = value;
+            OnPropertyChanged();
+        }
+    }
+
+    public bool StartWithWindows
+    {
+        get => _startWithWindows;
+        set
+        {
+            if (_startWithWindows == value)
+            {
+                return;
+            }
+
+            _startWithWindows = value;
+            StartupManager.SetEnabled(value);
+            StatusMessage = value
+                ? "ZenLoad se iniciará oculto con Windows."
+                : "Inicio automático desactivado.";
             OnPropertyChanged();
         }
     }
