@@ -38,7 +38,7 @@ public partial class MainWindow : FluentWindow
 
         _trayIcon = new Forms.NotifyIcon
         {
-            Icon = System.Drawing.SystemIcons.Application,
+            Icon = GetApplicationIcon(),
             Text = "ZenLoad",
             Visible = true,
             ContextMenuStrip = trayMenu
@@ -50,6 +50,25 @@ public partial class MainWindow : FluentWindow
         UpdateTrayMenu();
         _monitorService.ActivityRecorded += OnActivityRecorded;
         _monitorService.StateChanged += OnMonitorStateChanged;
+    }
+
+    private static System.Drawing.Icon GetApplicationIcon()
+    {
+        try
+        {
+            var executablePath = Environment.ProcessPath;
+            if (!string.IsNullOrWhiteSpace(executablePath))
+            {
+                return System.Drawing.Icon.ExtractAssociatedIcon(executablePath)
+                    ?? System.Drawing.SystemIcons.Application;
+            }
+        }
+        catch (Exception)
+        {
+            // Fall back to the Windows default icon if the executable icon cannot be read.
+        }
+
+        return System.Drawing.SystemIcons.Application;
     }
 
     private void OnLoaded(object sender, RoutedEventArgs e)

@@ -9,11 +9,13 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <AssemblyName>ZenLoad</AssemblyName>
     <RootNamespace>ZenLoad</RootNamespace>
+    <ApplicationIcon>Assets\ZenLoad.ico</ApplicationIcon>
     <Platforms>AnyCPU</Platforms>
   </PropertyGroup>
 
   <ItemGroup>
     <PackageReference Include="WPF-UI" Version="4.3.0" />
+    <Resource Include="Assets\ZenLoad.ico" />
   </ItemGroup>
 
 </Project>
