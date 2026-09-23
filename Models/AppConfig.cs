@@ -20,6 +20,9 @@ public sealed class AppConfig
     public Dictionary<string, string> ExtensionRules { get; set; } =
         new(StringComparer.OrdinalIgnoreCase);
 
+    public HashSet<string> DisabledExtensions { get; set; } =
+        new(StringComparer.OrdinalIgnoreCase);
+
     [JsonIgnore]
     public static string ConfigDirectoryPath => Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
@@ -92,7 +95,9 @@ public sealed class AppConfig
         return config;
     }
 
-    public void ReplaceRules(IDictionary<string, string> rules)
+    public void ReplaceRules(
+        IDictionary<string, string> rules,
+        IEnumerable<string>? disabledExtensions = null)
     {
         ExtensionRules = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 
@@ -102,6 +107,16 @@ public sealed class AppConfig
             if (!string.IsNullOrWhiteSpace(normalizedExtension) && !string.IsNullOrWhiteSpace(destination))
             {
                 ExtensionRules[normalizedExtension] = destination.Trim();
+            }
+        }
+
+        DisabledExtensions = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var extension in disabledExtensions ?? [])
+        {
+            var normalizedExtension = NormalizeExtension(extension);
+            if (ExtensionRules.ContainsKey(normalizedExtension))
+            {
+                DisabledExtensions.Add(normalizedExtension);
             }
         }
     }
@@ -158,6 +173,11 @@ public sealed class AppConfig
         }
 
         ExtensionRules = normalized;
+        DisabledExtensions = new HashSet<string>(
+            (DisabledExtensions ?? new())
+                .Select(NormalizeExtension)
+                .Where(extension => normalized.ContainsKey(extension)),
+            StringComparer.OrdinalIgnoreCase);
     }
 
     private static string GetKnownFolder(

@@ -4,7 +4,6 @@
                  xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
                  xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
                  xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
-                 xmlns:tray="http://schemas.lepo.co/wpfui/2022/xaml/tray"
                  mc:Ignorable="d"
                  Title="ZenLoad"
                  Width="1040"
@@ -93,11 +92,40 @@
                     </StackPanel>
                 </ui:Card>
 
+                <TextBlock Margin="4,12,4,0"
+                           Foreground="#C50F1F"
+                           Text="{Binding RouteValidationMessage}"
+                           TextWrapping="Wrap" />
+
+                <ui:Card Margin="0,18,0,0" Padding="18">
+                    <Expander Header="Actividad reciente" IsExpanded="True">
+                        <DataGrid Height="175"
+                                  Margin="0,12,0,0"
+                                  AutoGenerateColumns="False"
+                                  CanUserAddRows="False"
+                                  CanUserDeleteRows="False"
+                                  HeadersVisibility="Column"
+                                  IsReadOnly="True"
+                                  ItemsSource="{Binding RecentActivity}">
+                            <DataGrid.Columns>
+                                <DataGridTextColumn Width="75" Header="Hora" Binding="{Binding TimeText}" />
+                                <DataGridTextColumn Width="170" Header="Estado" Binding="{Binding StatusText}" />
+                                <DataGridTextColumn Width="220" Header="Archivo" Binding="{Binding FileName}" />
+                                <DataGridTextColumn Width="*" Header="Detalles" Binding="{Binding Details}" />
+                            </DataGrid.Columns>
+                        </DataGrid>
+                    </Expander>
+                </ui:Card>
+
                 <StackPanel Margin="0,18,0,0" Orientation="Horizontal" HorizontalAlignment="Right">
                     <CheckBox Margin="0,0,24,0"
                               VerticalAlignment="Center"
                               IsChecked="{Binding StartWithWindows, Mode=TwoWay}"
                               Content="Iniciar con Windows" />
+                    <ui:Button Margin="0,0,10,0"
+                               Padding="22,10"
+                               Command="{Binding TogglePauseCommand}"
+                               Content="{Binding PauseButtonText}" />
                     <ui:Button Margin="0,0,10,0"
                                Padding="22,10"
                                Command="{Binding ResetCommand}"
@@ -124,21 +152,5 @@
         </Border>
 
         <ui:ContentDialogHost x:Name="RootContentDialogHost" Grid.RowSpan="3" />
-
-        <tray:NotifyIcon x:Name="TrayIcon"
-                         Grid.RowSpan="3"
-                         FocusOnLeftClick="True"
-                         Icon="{DynamicResource ZenLoadTrayIcon}"
-                         MenuOnRightClick="True"
-                         LeftDoubleClick="OnTrayIconDoubleClick"
-                         TooltipText="ZenLoad">
-            <tray:NotifyIcon.Menu>
-                <ContextMenu>
-                    <MenuItem Header="Abrir ZenLoad" Click="OnOpenFromTrayClick" />
-                    <Separator />
-                    <MenuItem Header="Salir" Click="OnExitFromTrayClick" />
-                </ContextMenu>
-            </tray:NotifyIcon.Menu>
-        </tray:NotifyIcon>
     </Grid>
 </ui:FluentWindow>

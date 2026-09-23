@@ -1,5 +1,6 @@
 using System.Collections.ObjectModel;
 using System.ComponentModel;
+using System.IO;
 using System.Runtime.CompilerServices;
 using ZenLoad.Models;
 using ZenLoad.Services;
@@ -14,6 +15,8 @@ public sealed class MainViewModel : INotifyPropertyChanged
     private string _statusMessage = "Listo para organizar tus Descargas.";
     private RuleEntry? _selectedRule;
     private bool _startWithWindows;
+    private bool _isPaused;
+    private string _routeValidationMessage = string.Empty;
 
     public MainViewModel(
         AppConfig config,
@@ -24,7 +27,9 @@ public sealed class MainViewModel : INotifyPropertyChanged
         _monitorService = monitorService;
         _folderPickerService = folderPickerService;
         _startWithWindows = StartupManager.IsEnabled;
+        _isPaused = monitorService.IsPaused;
         Rules = new ObservableCollection<RuleEntry>();
+        RecentActivity = new ObservableCollection<ActivityEntry>();
         LoadRules();
 
         SaveCommand = new RelayCommand(_ => Save());
@@ -32,11 +37,15 @@ public sealed class MainViewModel : INotifyPropertyChanged
         AddCommand = new RelayCommand(_ => AddRule());
         RemoveCommand = new RelayCommand(_ => RemoveSelectedRule(), _ => SelectedRule is not null);
         BrowseCommand = new RelayCommand(BrowseFolder);
+        TogglePauseCommand = new RelayCommand(_ => _monitorService.SetPaused(!_monitorService.IsPaused));
 
         _monitorService.RuleAdded += OnRuleAdded;
+        _monitorService.ActivityRecorded += OnActivityRecorded;
+        _monitorService.StateChanged += OnStateChanged;
     }
 
     public ObservableCollection<RuleEntry> Rules { get; }
+    public ObservableCollection<ActivityEntry> RecentActivity { get; }
 
     public AppConfig Config => _config;
 
@@ -71,6 +80,39 @@ public sealed class MainViewModel : INotifyPropertyChanged
         }
     }
 
+    public bool IsPaused
+    {
+        get => _isPaused;
+        private set
+        {
+            if (_isPaused == value)
+            {
+                return;
+            }
+
+            _isPaused = value;
+            OnPropertyChanged();
+            OnPropertyChanged(nameof(PauseButtonText));
+        }
+    }
+
+    public string PauseButtonText => IsPaused ? "Reanudar" : "Pausar";
+
+    public string RouteValidationMessage
+    {
+        get => _routeValidationMessage;
+        private set
+        {
+            if (_routeValidationMessage == value)
+            {
+                return;
+            }
+
+            _routeValidationMessage = value;
+            OnPropertyChanged();
+        }
+    }
+
     public bool StartWithWindows
     {
         get => _startWithWindows;
@@ -95,6 +137,7 @@ public sealed class MainViewModel : INotifyPropertyChanged
     public RelayCommand AddCommand { get; }
     public RelayCommand RemoveCommand { get; }
     public RelayCommand BrowseCommand { get; }
+    public RelayCommand TogglePauseCommand { get; }
 
     public event PropertyChangedEventHandler? PropertyChanged;
 
@@ -134,7 +177,24 @@ public sealed class MainViewModel : INotifyPropertyChanged
             }
         }
 
-        _config.ReplaceRules(rules);
+        var disabledExtensions = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var rule in Rules.Where(rule => !rule.IsEnabled))
+        {
+            foreach (var extensionValue in rule.Extension.Split(
+                         new[] { ',', ';', ' ', '\r', '\n', '\t' },
+                         StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+            {
+                disabledExtensions.Add(AppConfig.NormalizeExtension(extensionValue));
+            }
+        }
+
+        if (rules.Count == 0)
+        {
+            StatusMessage = "Debes conservar al menos una extensión válida.";
+            return;
+        }
+
+        _config.ReplaceRules(rules, disabledExtensions);
         _config.Save();
         _monitorService.UpdateRules(_config);
         LoadRules();
@@ -188,13 +248,19 @@ public sealed class MainViewModel : INotifyPropertyChanged
     private void LoadRules()
     {
         Rules.Clear();
-        foreach (var group in _config.ExtensionRules
+        foreach (var destinationGroup in _config.ExtensionRules
                      .OrderBy(pair => pair.Key)
                      .GroupBy(pair => pair.Value, StringComparer.OrdinalIgnoreCase))
         {
-            var extensions = string.Join(", ", group.Select(pair => pair.Key));
-            Rules.Add(new RuleEntry(extensions, group.Key));
+            foreach (var enabledGroup in destinationGroup.GroupBy(pair =>
+                         !_config.DisabledExtensions.Contains(pair.Key)))
+            {
+                var extensions = string.Join(", ", enabledGroup.Select(pair => pair.Key));
+                Rules.Add(new RuleEntry(extensions, destinationGroup.Key, enabledGroup.Key));
+            }
         }
+
+        RefreshRouteValidation();
     }
 
     private void OnRuleAdded(object? sender, RuleAddedEventArgs e)
@@ -208,7 +274,8 @@ public sealed class MainViewModel : INotifyPropertyChanged
         dispatcher.BeginInvoke(() =>
         {
             var existingRule = Rules.FirstOrDefault(rule =>
-                string.Equals(rule.Destination, e.Destination, StringComparison.OrdinalIgnoreCase));
+                rule.IsEnabled
+                && string.Equals(rule.Destination, e.Destination, StringComparison.OrdinalIgnoreCase));
 
             if (existingRule is not null)
             {
@@ -228,6 +295,52 @@ public sealed class MainViewModel : INotifyPropertyChanged
 
             StatusMessage = $"Nueva regla creada para {e.Extension}.";
         });
+    }
+
+    private void OnActivityRecorded(object? sender, ActivityEventArgs e)
+    {
+        var dispatcher = System.Windows.Application.Current?.Dispatcher;
+        if (dispatcher is null)
+        {
+            return;
+        }
+
+        dispatcher.BeginInvoke(() =>
+        {
+            RecentActivity.Insert(0, new ActivityEntry(DateTime.Now, e.FileName, e.Status, e.Details));
+            while (RecentActivity.Count > 100)
+            {
+                RecentActivity.RemoveAt(RecentActivity.Count - 1);
+            }
+
+            if (e.Status == ActivityStatus.Error)
+            {
+                StatusMessage = e.Details;
+            }
+        });
+    }
+
+    private void OnStateChanged(object? sender, EventArgs e)
+    {
+        var dispatcher = System.Windows.Application.Current?.Dispatcher;
+        dispatcher?.BeginInvoke(() => IsPaused = _monitorService.IsPaused);
+    }
+
+    private void RefreshRouteValidation()
+    {
+        var missingRoutes = Rules
+            .Where(rule => rule.IsEnabled && !string.IsNullOrWhiteSpace(rule.Destination))
+            .Select(rule => Path.IsPathRooted(rule.Destination)
+                ? rule.Destination
+                : Path.Combine(AppConfig.GetDownloadsPath(), rule.Destination))
+            .Where(destination => !Directory.Exists(destination))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .Take(3)
+            .ToArray();
+
+        RouteValidationMessage = missingRoutes.Length == 0
+            ? string.Empty
+            : $"Aviso: estas carpetas no existen todavía y se crearán al mover un archivo: {string.Join(", ", missingRoutes)}";
     }
 
     private void OnPropertyChanged([CallerMemberName] string? propertyName = null) =>

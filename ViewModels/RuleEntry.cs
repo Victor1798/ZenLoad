@@ -7,11 +7,13 @@ public sealed class RuleEntry : INotifyPropertyChanged
 {
     private string _extension;
     private string _destination;
+    private bool _isEnabled;
 
-    public RuleEntry(string extension, string destination)
+    public RuleEntry(string extension, string destination, bool isEnabled = true)
     {
         _extension = extension;
         _destination = destination;
+        _isEnabled = isEnabled;
     }
 
     public string Extension
@@ -40,6 +42,21 @@ public sealed class RuleEntry : INotifyPropertyChanged
             }
 
             _destination = value;
+            OnPropertyChanged();
+        }
+    }
+
+    public bool IsEnabled
+    {
+        get => _isEnabled;
+        set
+        {
+            if (_isEnabled == value)
+            {
+                return;
+            }
+
+            _isEnabled = value;
             OnPropertyChanged();
         }
     }

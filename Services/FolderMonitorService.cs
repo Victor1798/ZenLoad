@@ -10,9 +10,14 @@ public sealed class RuleAddedEventArgs(string extension, string destination) : E
     public string Destination { get; } = destination;
 }
 
-/// <summary>
-/// Singleton service responsible for monitoring Downloads and organizing files.
-/// </summary>
+public sealed class ActivityEventArgs(string fileName, ActivityStatus status, string details) : EventArgs
+{
+    public string FileName { get; } = fileName;
+    public ActivityStatus Status { get; } = status;
+    public string Details { get; } = details;
+}
+
+/// <summary>Singleton service that monitors Downloads and organizes files.</summary>
 public sealed class FolderMonitorService : IDisposable
 {
     private static readonly Lazy<FolderMonitorService> LazyInstance = new(() => new FolderMonitorService());
@@ -22,15 +27,18 @@ public sealed class FolderMonitorService : IDisposable
         ".part",       // Firefox and download managers
         ".tmp"
     };
+
     private readonly ConcurrentDictionary<string, byte> _filesBeingProcessed = new(StringComparer.OrdinalIgnoreCase);
     private readonly HashSet<string> _ignoredExtensions = new(StringComparer.OrdinalIgnoreCase);
     private readonly SemaphoreSlim _promptGate = new(1, 1);
+    private readonly SemaphoreSlim _scanGate = new(1, 1);
     private readonly object _sync = new();
 
     private FileSystemWatcher? _watcher;
     private AppConfig? _config;
     private Func<string, Task<bool>>? _promptForNewExtension;
     private string _downloadsPath = string.Empty;
+    private bool _paused;
     private bool _disposed;
 
     private FolderMonitorService()
@@ -38,10 +46,12 @@ public sealed class FolderMonitorService : IDisposable
     }
 
     public static FolderMonitorService Instance => LazyInstance.Value;
-
     public bool IsRunning => _watcher?.EnableRaisingEvents == true;
+    public bool IsPaused => Volatile.Read(ref _paused);
 
     public event EventHandler<RuleAddedEventArgs>? RuleAdded;
+    public event EventHandler<ActivityEventArgs>? ActivityRecorded;
+    public event EventHandler? StateChanged;
 
     public void Start(AppConfig config, Func<string, Task<bool>> promptForNewExtension)
     {
@@ -62,12 +72,39 @@ public sealed class FolderMonitorService : IDisposable
         _watcher.Created += OnFileCreated;
         _watcher.Renamed += OnFileRenamed;
         _watcher.EnableRaisingEvents = true;
+
+        // Process files that were already present before ZenLoad started.
+        _ = ScanExistingFilesAsync();
     }
 
     public void UpdateRules(AppConfig config)
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
-        _config = config;
+        lock (_sync)
+        {
+            _config = config;
+        }
+    }
+
+    public void SetPaused(bool paused)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+
+        if (IsPaused == paused)
+        {
+            return;
+        }
+
+        Volatile.Write(ref _paused, paused);
+        RecordActivity(string.Empty, ActivityStatus.Info, paused
+            ? "Organización pausada."
+            : "Organización reanudada.");
+        StateChanged?.Invoke(this, EventArgs.Empty);
+
+        if (!paused)
+        {
+            _ = ScanExistingFilesAsync();
+        }
     }
 
     public void Stop()
@@ -84,21 +121,14 @@ public sealed class FolderMonitorService : IDisposable
         _watcher = null;
     }
 
-    private void OnFileCreated(object sender, FileSystemEventArgs e)
-    {
-        QueueFile(e.FullPath);
-    }
+    private void OnFileCreated(object sender, FileSystemEventArgs e) => QueueFile(e.FullPath);
 
-    private void OnFileRenamed(object sender, RenamedEventArgs e)
-    {
-        // Browsers usually rename the temporary download to its final name
-        // instead of raising a new Created event for the completed file.
-        QueueFile(e.FullPath);
-    }
+    private void OnFileRenamed(object sender, RenamedEventArgs e) => QueueFile(e.FullPath);
 
     private void QueueFile(string filePath)
     {
-        if (Directory.Exists(filePath)
+        if (IsPaused
+            || Directory.Exists(filePath)
             || IsTemporaryDownload(filePath)
             || !_filesBeingProcessed.TryAdd(filePath, 0))
         {
@@ -108,11 +138,40 @@ public sealed class FolderMonitorService : IDisposable
         _ = ProcessFileAsync(filePath);
     }
 
+    private async Task ScanExistingFilesAsync()
+    {
+        if (IsPaused)
+        {
+            return;
+        }
+
+        await _scanGate.WaitAsync();
+        try
+        {
+            foreach (var filePath in Directory.EnumerateFiles(_downloadsPath, "*", SearchOption.TopDirectoryOnly))
+            {
+                QueueFile(filePath);
+            }
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            RecordActivity(string.Empty, ActivityStatus.Error, $"No se pudo leer Descargas: {ex.Message}");
+        }
+        catch (IOException ex)
+        {
+            RecordActivity(string.Empty, ActivityStatus.Error, $"No se pudo escanear Descargas: {ex.Message}");
+        }
+        finally
+        {
+            _scanGate.Release();
+        }
+    }
+
     private async Task ProcessFileAsync(string filePath)
     {
         try
         {
-            if (!await WaitUntilFileIsReadyAsync(filePath))
+            if (IsPaused || !await WaitUntilFileIsReadyAsync(filePath))
             {
                 return;
             }
@@ -120,21 +179,55 @@ public sealed class FolderMonitorService : IDisposable
             var extension = GetCompoundExtension(filePath);
             if (string.IsNullOrWhiteSpace(extension))
             {
+                RecordActivity(filePath, ActivityStatus.Ignored, "El archivo no tiene una extensión reconocida.");
                 return;
             }
 
-            var destination = GetRule(extension);
-            if (destination is null)
+            var rule = GetRule(extension);
+            string? destination;
+
+            if (!rule.Found)
             {
                 destination = await AskForNewExtensionAsync(extension);
+            }
+            else if (!rule.Enabled)
+            {
+                RecordActivity(filePath, ActivityStatus.Ignored, $"La regla para {extension} está desactivada.");
+                return;
+            }
+            else
+            {
+                destination = rule.Destination;
             }
 
             if (string.IsNullOrWhiteSpace(destination) || IsDownloadsRoot(destination))
             {
+                RecordActivity(filePath, ActivityStatus.Ignored, "La regla deja el archivo en Descargas.");
                 return;
             }
 
-            MoveFile(filePath, destination);
+            try
+            {
+                var moveResult = MoveFile(filePath, destination);
+                var folderNote = moveResult.FolderWasCreated ? " Carpeta creada automáticamente." : string.Empty;
+                RecordActivity(filePath, ActivityStatus.Moved, $"Movido a {moveResult.TargetPath}.{folderNote}");
+            }
+            catch (UnauthorizedAccessException ex)
+            {
+                RecordActivity(filePath, ActivityStatus.Error, $"Sin permisos para mover el archivo: {ex.Message}");
+            }
+            catch (IOException ex)
+            {
+                RecordActivity(filePath, ActivityStatus.Error, $"No se pudo mover el archivo: {ex.Message}");
+            }
+            catch (ArgumentException ex)
+            {
+                RecordActivity(filePath, ActivityStatus.Error, $"La ruta de destino no es válida: {ex.Message}");
+            }
+            catch (NotSupportedException ex)
+            {
+                RecordActivity(filePath, ActivityStatus.Error, $"La ruta de destino no es compatible: {ex.Message}");
+            }
         }
         finally
         {
@@ -148,13 +241,14 @@ public sealed class FolderMonitorService : IDisposable
         try
         {
             var existingRule = GetRule(extension);
-            if (existingRule is not null)
+            if (existingRule.Found)
             {
-                return existingRule;
+                return existingRule.Enabled ? existingRule.Destination : null;
             }
 
             if (_ignoredExtensions.Contains(extension) || _promptForNewExtension is null || _config is null)
             {
+                RecordActivity(string.Empty, ActivityStatus.Ignored, $"Extensión desconocida ignorada: {extension}.");
                 return null;
             }
 
@@ -162,18 +256,26 @@ public sealed class FolderMonitorService : IDisposable
             if (!accepted)
             {
                 _ignoredExtensions.Add(extension);
+                RecordActivity(string.Empty, ActivityStatus.Ignored, $"El usuario rechazó la extensión {extension}.");
                 return null;
             }
 
             var destination = Path.Combine(_downloadsPath, extension);
             Directory.CreateDirectory(destination);
             _config.ExtensionRules[extension] = destination;
+            _config.DisabledExtensions.Remove(extension);
             _config.Save();
             RuleAdded?.Invoke(this, new RuleAddedEventArgs(extension, destination));
             return destination;
         }
-        catch (IOException)
+        catch (UnauthorizedAccessException ex)
         {
+            RecordActivity(string.Empty, ActivityStatus.Error, $"No se pudo crear la carpeta para {extension}: {ex.Message}");
+            return null;
+        }
+        catch (IOException ex)
+        {
+            RecordActivity(string.Empty, ActivityStatus.Error, $"No se pudo crear la carpeta para {extension}: {ex.Message}");
             return null;
         }
         finally
@@ -182,21 +284,25 @@ public sealed class FolderMonitorService : IDisposable
         }
     }
 
-    private string? GetRule(string extension)
+    private RuleMatch GetRule(string extension)
     {
         lock (_sync)
         {
-            return _config?.ExtensionRules.TryGetValue(extension, out var destination) == true
-                ? destination
-                : null;
+            if (_config?.ExtensionRules.TryGetValue(extension, out var destination) != true)
+            {
+                return new RuleMatch(false, null, false);
+            }
+
+            var disabled = _config.DisabledExtensions.Contains(extension);
+            return new RuleMatch(true, destination, !disabled);
         }
     }
 
-    private void MoveFile(string filePath, string configuredDestination)
+    private MoveResult MoveFile(string filePath, string configuredDestination)
     {
         if (!File.Exists(filePath))
         {
-            return;
+            throw new FileNotFoundException("El archivo ya no existe.", filePath);
         }
 
         var destination = Path.IsPathRooted(configuredDestination)
@@ -205,12 +311,14 @@ public sealed class FolderMonitorService : IDisposable
 
         if (IsDownloadsRoot(destination))
         {
-            return;
+            throw new IOException("La carpeta de destino es la misma que Descargas.");
         }
 
+        var folderWasCreated = !Directory.Exists(destination);
         Directory.CreateDirectory(destination);
         var targetPath = GetAvailableTargetPath(destination, Path.GetFileName(filePath));
         File.Move(filePath, targetPath);
+        return new MoveResult(targetPath, folderWasCreated);
     }
 
     private static string GetAvailableTargetPath(string directory, string fileName)
@@ -295,6 +403,13 @@ public sealed class FolderMonitorService : IDisposable
             fileName.EndsWith(suffix, StringComparison.OrdinalIgnoreCase));
     }
 
+    private void RecordActivity(string filePath, ActivityStatus status, string details)
+    {
+        ActivityRecorded?.Invoke(
+            this,
+            new ActivityEventArgs(Path.GetFileName(filePath), status, details));
+    }
+
     public void Dispose()
     {
         if (_disposed)
@@ -304,6 +419,10 @@ public sealed class FolderMonitorService : IDisposable
 
         Stop();
         _promptGate.Dispose();
+        _scanGate.Dispose();
         _disposed = true;
     }
+
+    private readonly record struct RuleMatch(bool Found, string? Destination, bool Enabled);
+    private readonly record struct MoveResult(string TargetPath, bool FolderWasCreated);
 }

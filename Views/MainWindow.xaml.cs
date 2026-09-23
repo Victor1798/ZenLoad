@@ -1,9 +1,12 @@
+using System.ComponentModel;
 using System.Windows;
 using System.Windows.Threading;
-using System.ComponentModel;
+using Forms = System.Windows.Forms;
+using ZenLoad.Models;
 using ZenLoad.Services;
 using ZenLoad.ViewModels;
 using Wpf.Ui;
+using Wpf.Ui.Appearance;
 using Wpf.Ui.Controls;
 
 namespace ZenLoad.Views;
@@ -12,6 +15,8 @@ public partial class MainWindow : FluentWindow
 {
     private readonly ContentDialogService _dialogService = new();
     private readonly FolderMonitorService _monitorService = FolderMonitorService.Instance;
+    private readonly Forms.NotifyIcon _trayIcon;
+    private readonly Forms.ToolStripMenuItem _pauseMenuItem;
     private bool _allowClose;
 
     public MainWindow(MainViewModel viewModel)
@@ -19,19 +24,41 @@ public partial class MainWindow : FluentWindow
         InitializeComponent();
         DataContext = viewModel;
         _dialogService.SetDialogHost(RootContentDialogHost);
+
+        SystemThemeWatcher.Watch(this);
+
+        _pauseMenuItem = new Forms.ToolStripMenuItem();
+        _pauseMenuItem.Click += OnPauseFromTrayClick;
+
+        var trayMenu = new Forms.ContextMenuStrip();
+        trayMenu.Items.Add("Abrir ZenLoad", null, OnOpenFromTrayClick);
+        trayMenu.Items.Add(_pauseMenuItem);
+        trayMenu.Items.Add(new Forms.ToolStripSeparator());
+        trayMenu.Items.Add("Salir", null, OnExitFromTrayClick);
+
+        _trayIcon = new Forms.NotifyIcon
+        {
+            Icon = System.Drawing.SystemIcons.Application,
+            Text = "ZenLoad",
+            Visible = true,
+            ContextMenuStrip = trayMenu
+        };
+        _trayIcon.DoubleClick += OnTrayIconDoubleClick;
+
         Loaded += OnLoaded;
         Closing += OnClosing;
+        UpdateTrayMenu();
+        _monitorService.ActivityRecorded += OnActivityRecorded;
+        _monitorService.StateChanged += OnMonitorStateChanged;
     }
 
     private void OnLoaded(object sender, RoutedEventArgs e)
     {
         _monitorService.Start(((MainViewModel)DataContext).Config, ShowNewExtensionDialogAsync);
+        UpdateTrayMenu();
     }
 
-    public void HideToTray()
-    {
-        Hide();
-    }
+    public void HideToTray() => Hide();
 
     private void OnClosing(object? sender, CancelEventArgs e)
     {
@@ -44,14 +71,23 @@ public partial class MainWindow : FluentWindow
         HideToTray();
     }
 
-    private void OnTrayIconDoubleClick(object sender, RoutedEventArgs e) => ShowFromTray();
+    private void OnTrayIconDoubleClick(object? sender, EventArgs e) => ShowFromTray();
 
-    private void OnOpenFromTrayClick(object sender, RoutedEventArgs e) => ShowFromTray();
+    private void OnOpenFromTrayClick(object? sender, EventArgs e) => ShowFromTray();
 
-    private void OnExitFromTrayClick(object sender, RoutedEventArgs e)
+    private void OnPauseFromTrayClick(object? sender, EventArgs e)
+    {
+        ((MainViewModel)DataContext).TogglePauseCommand.Execute(null);
+        UpdateTrayMenu();
+    }
+
+    private void OnExitFromTrayClick(object? sender, EventArgs e)
     {
         _allowClose = true;
-        TrayIcon.Dispose();
+        _monitorService.ActivityRecorded -= OnActivityRecorded;
+        _monitorService.StateChanged -= OnMonitorStateChanged;
+        _trayIcon.Visible = false;
+        _trayIcon.Dispose();
         System.Windows.Application.Current.Shutdown();
     }
 
@@ -60,6 +96,33 @@ public partial class MainWindow : FluentWindow
         Show();
         WindowState = WindowState.Normal;
         Activate();
+    }
+
+    private void UpdateTrayMenu()
+    {
+        if (!Dispatcher.CheckAccess())
+        {
+            Dispatcher.BeginInvoke(UpdateTrayMenu);
+            return;
+        }
+
+        _pauseMenuItem.Text = ((MainViewModel)DataContext).IsPaused ? "Reanudar" : "Pausar";
+    }
+
+    private void OnMonitorStateChanged(object? sender, EventArgs e) => UpdateTrayMenu();
+
+    private void OnActivityRecorded(object? sender, ActivityEventArgs e)
+    {
+        Dispatcher.BeginInvoke(() =>
+        {
+            if (e.Status is ActivityStatus.Moved or ActivityStatus.Error)
+            {
+                var icon = e.Status == ActivityStatus.Error
+                    ? Forms.ToolTipIcon.Error
+                    : Forms.ToolTipIcon.Info;
+                _trayIcon.ShowBalloonTip(3500, "ZenLoad", e.Details, icon);
+            }
+        });
     }
 
     private async Task<bool> ShowNewExtensionDialogAsync(string extension)
