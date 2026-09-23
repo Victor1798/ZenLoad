@@ -34,8 +34,8 @@ La configuracion se guarda en:
 ## Instalacion recomendada
 
 1. Abre el archivo `installer\ZenLoad-Setup.exe`.
-2. Sigue el asistente de instalacion.
-3. Abre ZenLoad desde el menu Inicio o desde el acceso directo del escritorio,
+1. Sigue el asistente de instalacion.
+1. Abre ZenLoad desde el menu Inicio o desde el acceso directo del escritorio,
    si lo seleccionaste durante la instalacion.
 
 El instalador coloca la aplicacion en la carpeta local de programas y crea los
