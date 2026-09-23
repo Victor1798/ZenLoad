@@ -6,10 +6,10 @@
                  xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
                  mc:Ignorable="d"
                  Title="ZenLoad"
-                 Width="1040"
-                 Height="720"
-                 MinWidth="760"
-                 MinHeight="500"
+                 Width="980"
+                 Height="640"
+                 MinWidth="800"
+                 MinHeight="520"
                  WindowStartupLocation="CenterScreen"
                  ExtendsContentIntoTitleBar="True"
                  WindowBackdropType="Mica"
@@ -17,7 +17,9 @@
     <Grid>
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
 
@@ -25,38 +27,51 @@
                      Title="ZenLoad"
                      Icon="{ui:SymbolIcon Folder24}" />
 
-        <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
-            <StackPanel Margin="28,18,28,24">
-                <TextBlock FontSize="30"
+        <Grid Grid.Row="1" Margin="26,12,26,8">
+            <StackPanel>
+                <TextBlock FontSize="24"
                            FontWeight="SemiBold"
                            Text="Organiza tus Descargas" />
-                <TextBlock Margin="0,6,0,22"
+                <TextBlock Margin="0,3,0,0"
                            Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-                           Text="ZenLoad vigila tu carpeta de Descargas y aplica tus reglas automáticamente." />
+                           Text="ZenLoad aplica tus reglas automaticamente en segundo plano." />
+            </StackPanel>
+            <CheckBox HorizontalAlignment="Right"
+                      VerticalAlignment="Center"
+                      IsChecked="{Binding StartWithWindows, Mode=TwoWay}"
+                      Content="Iniciar con Windows" />
+        </Grid>
 
-                <ui:Card Padding="18">
-                    <StackPanel>
-                        <DockPanel Margin="0,0,0,12">
-                            <StackPanel DockPanel.Dock="Left">
-                                <TextBlock FontSize="18" FontWeight="SemiBold" Text="Reglas de organización" />
-                                <TextBlock Margin="0,3,0,0"
-                                           Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-                                           Text="Usa rutas absolutas o carpetas relativas a Descargas." />
-                            </StackPanel>
-                            <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
-                                <ui:Button Margin="6,0,0,0"
-                                           Padding="14,7"
-                                           Command="{Binding AddCommand}"
-                                           Content="Agregar" />
-                                <ui:Button Margin="6,0,0,0"
-                                           Padding="14,7"
-                                           Command="{Binding RemoveCommand}"
-                                           Content="Eliminar" />
-                            </StackPanel>
-                        </DockPanel>
+        <TabControl Grid.Row="2" Margin="26,6,26,12">
+            <TabItem Header="Reglas">
+                <Grid Margin="0,12,0,0">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="*" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
 
-                                <DataGrid MinHeight="360"
-                                  AutoGenerateColumns="False"
+                    <DockPanel Grid.Row="0" Margin="0,0,0,8">
+                        <StackPanel DockPanel.Dock="Left">
+                            <TextBlock FontSize="17" FontWeight="SemiBold" Text="Reglas de organizacion" />
+                            <TextBlock Margin="0,2,0,0"
+                                       Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                       Text="Agrupa extensiones y elige la carpeta con Examinar." />
+                        </StackPanel>
+                        <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+                            <ui:Button Margin="6,0,0,0"
+                                       Padding="13,6"
+                                       Command="{Binding AddCommand}"
+                                       Content="Agregar" />
+                            <ui:Button Margin="6,0,0,0"
+                                       Padding="13,6"
+                                       Command="{Binding RemoveCommand}"
+                                       Content="Eliminar" />
+                        </StackPanel>
+                    </DockPanel>
+
+                    <ui:Card Grid.Row="1" Padding="10">
+                        <DataGrid AutoGenerateColumns="False"
                                   CanUserAddRows="False"
                                   CanUserDeleteRows="False"
                                   HeadersVisibility="Column"
@@ -64,7 +79,10 @@
                                   SelectedItem="{Binding SelectedRule, Mode=TwoWay}"
                                   SelectionMode="Single">
                             <DataGrid.Columns>
-                                <DataGridTextColumn Width="260"
+                                <DataGridCheckBoxColumn Width="70"
+                                                        Header="Activa"
+                                                        Binding="{Binding IsEnabled, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                                <DataGridTextColumn Width="250"
                                                     Header="Extensiones"
                                                     Binding="{Binding Extension, UpdateSourceTrigger=PropertyChanged}" />
                                 <DataGridTemplateColumn Width="*" Header="Carpeta de destino">
@@ -73,7 +91,7 @@
                                             <DockPanel LastChildFill="True">
                                                 <ui:Button DockPanel.Dock="Right"
                                                            Margin="8,2,0,2"
-                                                           Padding="12,5"
+                                                           Padding="11,5"
                                                            Command="{Binding DataContext.BrowseCommand, RelativeSource={RelativeSource AncestorType=DataGrid}}"
                                                            CommandParameter="{Binding}"
                                                            Content="Examinar" />
@@ -86,22 +104,29 @@
                                 </DataGridTemplateColumn>
                             </DataGrid.Columns>
                         </DataGrid>
-                        <TextBlock Margin="2,10,0,0"
-                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-                                   Text="Puedes agrupar extensiones con comas, por ejemplo: .doc, .docx, .xls" />
-                    </StackPanel>
-                </ui:Card>
+                    </ui:Card>
 
-                <TextBlock Margin="4,12,4,0"
-                           Foreground="#C50F1F"
-                           Text="{Binding RouteValidationMessage}"
-                           TextWrapping="Wrap" />
+                    <TextBlock Grid.Row="2"
+                               Margin="2,8,2,0"
+                               Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                               Text="Ejemplo: .doc, .docx, .xls"
+                               TextWrapping="Wrap" />
+                </Grid>
+            </TabItem>
 
-                <ui:Card Margin="0,18,0,0" Padding="18">
-                    <Expander Header="Actividad reciente" IsExpanded="True">
-                        <DataGrid Height="175"
-                                  Margin="0,12,0,0"
-                                  AutoGenerateColumns="False"
+            <TabItem Header="Actividad">
+                <Grid Margin="0,12,0,0">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="*" />
+                    </Grid.RowDefinitions>
+                    <TextBlock Grid.Row="0"
+                               Margin="0,0,0,8"
+                               FontSize="17"
+                               FontWeight="SemiBold"
+                               Text="Actividad reciente" />
+                    <ui:Card Grid.Row="1" Padding="10">
+                        <DataGrid AutoGenerateColumns="False"
                                   CanUserAddRows="False"
                                   CanUserDeleteRows="False"
                                   HeadersVisibility="Column"
@@ -109,37 +134,39 @@
                                   ItemsSource="{Binding RecentActivity}">
                             <DataGrid.Columns>
                                 <DataGridTextColumn Width="75" Header="Hora" Binding="{Binding TimeText}" />
-                                <DataGridTextColumn Width="170" Header="Estado" Binding="{Binding StatusText}" />
-                                <DataGridTextColumn Width="220" Header="Archivo" Binding="{Binding FileName}" />
+                                <DataGridTextColumn Width="150" Header="Estado" Binding="{Binding StatusText}" />
+                                <DataGridTextColumn Width="230" Header="Archivo" Binding="{Binding FileName}" />
                                 <DataGridTextColumn Width="*" Header="Detalles" Binding="{Binding Details}" />
                             </DataGrid.Columns>
                         </DataGrid>
-                    </Expander>
-                </ui:Card>
+                    </ui:Card>
+                </Grid>
+            </TabItem>
+        </TabControl>
 
-                <StackPanel Margin="0,18,0,0" Orientation="Horizontal" HorizontalAlignment="Right">
-                    <CheckBox Margin="0,0,24,0"
-                              VerticalAlignment="Center"
-                              IsChecked="{Binding StartWithWindows, Mode=TwoWay}"
-                              Content="Iniciar con Windows" />
-                    <ui:Button Margin="0,0,10,0"
-                               Padding="22,10"
-                               Command="{Binding TogglePauseCommand}"
-                               Content="{Binding PauseButtonText}" />
-                    <ui:Button Margin="0,0,10,0"
-                               Padding="22,10"
-                               Command="{Binding ResetCommand}"
-                               Content="Restablecer" />
-                    <ui:Button Padding="22,10"
-                               Command="{Binding SaveCommand}"
-                               Content="Guardar reglas"
-                               Appearance="Primary" />
-                </StackPanel>
+        <StackPanel Grid.Row="3" Margin="26,0,26,12">
+            <TextBlock Margin="2,0,2,8"
+                       Foreground="#C50F1F"
+                       Text="{Binding RouteValidationMessage}"
+                       TextWrapping="Wrap" />
+            <StackPanel HorizontalAlignment="Right" Orientation="Horizontal">
+                <ui:Button Margin="0,0,8,0"
+                           Padding="18,8"
+                           Command="{Binding TogglePauseCommand}"
+                           Content="{Binding PauseButtonText}" />
+                <ui:Button Margin="0,0,8,0"
+                           Padding="18,8"
+                           Command="{Binding ResetCommand}"
+                           Content="Restablecer" />
+                <ui:Button Padding="18,8"
+                           Command="{Binding SaveCommand}"
+                           Content="Guardar reglas"
+                           Appearance="Primary" />
             </StackPanel>
-        </ScrollViewer>
+        </StackPanel>
 
-        <Border Grid.Row="2"
-                Padding="28,10"
+        <Border Grid.Row="4"
+                Padding="26,8"
                 Background="{DynamicResource CardBackgroundFillColorDefaultBrush}">
             <DockPanel>
                 <Ellipse Width="9"
@@ -151,6 +178,6 @@
             </DockPanel>
         </Border>
 
-        <ui:ContentDialogHost x:Name="RootContentDialogHost" Grid.RowSpan="3" />
+        <ui:ContentDialogHost x:Name="RootContentDialogHost" Grid.RowSpan="5" />
     </Grid>
 </ui:FluentWindow>
