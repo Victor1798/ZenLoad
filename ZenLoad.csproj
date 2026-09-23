@@ -15,7 +15,6 @@
 
   <ItemGroup>
     <PackageReference Include="WPF-UI" Version="4.3.0" />
-    <Resource Include="Assets\ZenLoad.ico" />
   </ItemGroup>
 
 </Project>

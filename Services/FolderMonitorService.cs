@@ -46,7 +46,6 @@ public sealed class FolderMonitorService : IDisposable
     }
 
     public static FolderMonitorService Instance => LazyInstance.Value;
-    public bool IsRunning => _watcher?.EnableRaisingEvents == true;
     public bool IsPaused => Volatile.Read(ref _paused);
 
     public event EventHandler<RuleAddedEventArgs>? RuleAdded;

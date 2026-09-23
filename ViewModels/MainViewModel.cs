@@ -198,7 +198,8 @@ public sealed class MainViewModel : INotifyPropertyChanged
         _config.Save();
         _monitorService.UpdateRules(_config);
         LoadRules();
-        StatusMessage = $"Guardado: {rules.Count} reglas activas.";
+        var activeRuleCount = rules.Count - disabledExtensions.Count;
+        StatusMessage = $"Guardado: {activeRuleCount} reglas activas de {rules.Count}.";
     }
 
     private void Reset()

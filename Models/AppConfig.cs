@@ -13,8 +13,7 @@ public sealed class AppConfig
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
         WriteIndented = true,
-        PropertyNameCaseInsensitive = true,
-        Converters = { new JsonStringEnumConverter() }
+        PropertyNameCaseInsensitive = true
     };
 
     public Dictionary<string, string> ExtensionRules { get; set; } =

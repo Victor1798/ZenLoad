@@ -100,8 +100,10 @@ las reglas a la configuracion inicial.
   espera de archivos y movimiento seguro.
 - `ViewModels/MainViewModel.cs`: reglas observables y comandos de la interfaz.
 - `Views/MainWindow.xaml`: interfaz Fluent basada en WPF-UI.
+- `Assets/ZenLoad.ico`: icono integrado en el ejecutable y la bandeja del sistema.
 - `installer/ZenLoad.iss`: configuracion del instalador de Inno Setup.
 - `scripts/Publish-ZenLoad.ps1`: publicacion y creacion del instalador.
+- `scripts/Generate-ZenLoadIcon.ps1`: regeneracion del icono en varios tamanos.
 
 ## Tecnologias
 
